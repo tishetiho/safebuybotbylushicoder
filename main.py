@@ -59,7 +59,10 @@ class CreateItem(StatesGroup):
     price = State()
     description = State()
     delivery_type = State()
-
+class AdminStates(StatesGroup):
+    mailing_text = State()
+    ban_id = State()
+    
 # --- КЛАВИАТУРЫ ---
 def main_menu():
     kb = [
@@ -261,6 +264,95 @@ async def withdraw_money(callback: types.CallbackQuery):
         await callback.answer("Ошибка API или недостаточно средств на шлюзе.", show_alert=True)
     conn.close()
 
+# --- АДМИН-ПАНЕЛЬ ---
+@dp.message(Command("admin"))
+async def admin_panel(message: types.Message):
+    if message.from_user.id != ADMIN_ID:
+        return
+
+    conn = sqlite3.connect('safebuy.db')
+    cur = conn.cursor()
+    
+    # Собираем статистику
+    total_users = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+    total_balance = cur.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
+    in_hold = cur.execute("SELECT SUM(amount) FROM deals WHERE status = 'open'").fetchone()[0] or 0
+    pending_items = cur.execute("SELECT COUNT(*) FROM items WHERE status = 'on_moderation'").fetchone()[0]
+    conn.close()
+
+    text = (f"🛠 **Админ-панель SafeBuy**\n\n"
+            f"👥 Всего юзеров: {total_users}\n"
+            f"💰 Баланс всех: {total_balance:.2f} ₽\n"
+            f"⏳ В холде (сделки): {in_hold:.2f} ₽\n"
+            f"📦 Ожидают модерации: {pending_items}\n\n"
+            f"Выберите действие:")
+
+    kb = [
+        [InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_mailing")],
+        [InlineKeyboardButton(text="🚫 Забанить юзера", callback_data="admin_ban")],
+        [InlineKeyboardButton(text="🔄 Режим: Mainnet", callback_data="toggle_net")] # Можно допилить смену текста
+    ]
+    
+    await message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
+
+# --- ЛОГИКА РАССЫЛКИ ---
+
+@dp.callback_query(F.data == "admin_mailing")
+async def start_mailing(callback: types.CallbackQuery, state: FSMContext):
+    await callback.message.answer("Введите текст рассылки (или /cancel для отмены):")
+    await state.set_state(AdminStates.mailing_text)
+
+@dp.message(AdminStates.mailing_text)
+async def process_mailing(message: types.Message, state: FSMContext):
+    if message.text == "/cancel":
+        await state.clear()
+        return await message.answer("Отменено.")
+
+    conn = sqlite3.connect('safebuy.db')
+    users = conn.execute("SELECT id FROM users").fetchall()
+    conn.close()
+
+    count = 0
+    for user in users:
+        try:
+            await bot.send_message(user[0], message.text)
+            count += 1
+            await asyncio.sleep(0.05) # Защита от спам-фильтра ТГ
+        except Exception:
+            continue
+    
+    await message.answer(f"✅ Рассылка завершена! Получили: {count} чел.")
+    await state.clear()
+
+# --- МОДЕРАЦИЯ ТОВАРОВ (КНОПКИ ИЗ ПРЕДЫДУЩИХ ШАГОВ) ---
+
+@dp.callback_query(F.data.startswith("approve_"))
+async def approve_item(callback: types.CallbackQuery):
+    item_id = callback.data.split("_")[1]
+    conn = sqlite3.connect('safebuy.db')
+    # Получаем ID продавца перед обновлением
+    seller_id = conn.execute("SELECT seller_id FROM items WHERE id = ?", (item_id,)).fetchone()[0]
+    
+    conn.execute("UPDATE items SET status = 'active' WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    
+    await callback.message.edit_text("✅ Товар одобрен и выставлен на маркет!")
+    await bot.send_message(seller_id, "🥳 Ваш товар прошел модерацию и доступен для покупки!")
+
+@dp.callback_query(F.data.startswith("reject_"))
+async def reject_item(callback: types.CallbackQuery):
+    item_id = callback.data.split("_")[1]
+    # Тут можно добавить FSM для ввода причины, но пока сделаем просто удаление
+    conn = sqlite3.connect('safebuy.db')
+    seller_id = conn.execute("SELECT seller_id FROM items WHERE id = ?", (item_id,)).fetchone()[0]
+    conn.execute("DELETE FROM items WHERE id = ?", (item_id,))
+    conn.commit()
+    conn.close()
+    
+    await callback.message.edit_text("❌ Товар отклонен и удален.")
+    await bot.send_message(seller_id, "⚠️ Ваш товар отклонен модератором.")
+    
   @dp.callback_query(F.data == "switch_currency")
 async def switch_currency(callback: types.CallbackQuery):
     conn = sqlite3.connect('safebuy.db')
