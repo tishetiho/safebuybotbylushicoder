@@ -92,6 +92,46 @@ async def start(message: types.Message):
         parse_mode="Markdown"
     )
 
+@dp.callback_query(F.data == "market")
+async def show_market(callback: types.CallbackQuery):
+    conn = sqlite3.connect('safebuy.db')
+    # Берем только активные товары
+    items = conn.execute("SELECT id, title, price FROM items WHERE status = 'active'").fetchall()
+    conn.close()
+
+    if not items:
+        return await callback.answer("📦 Маркет пока пуст. Будь первым продавцом!", show_alert=True)
+
+    text = "🛒 **Витрина товаров SafeBuy**\n\nВыберите интересующий товар:"
+    kb = []
+    
+    for item in items:
+        kb.append([InlineKeyboardButton(text=f"{item[1]} | {item[2]} ₽", callback_data=f"view_{item[0]}")])
+    
+    kb.append([InlineKeyboardButton(text="🔙 Назад", callback_data="main_menu_back")])
+    
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
+
+@dp.callback_query(F.data.startswith("view_"))
+async def view_item(callback: types.CallbackQuery):
+    item_id = callback.data.split("_")[1]
+    conn = sqlite3.connect('safebuy.db')
+    item = conn.execute("SELECT title, price, description, seller_id, type FROM items WHERE id = ?", (item_id,)).fetchone()
+    conn.close()
+
+    text = (f"📦 **{item[0]}**\n\n"
+            f"💰 Цена: {item[1]} ₽\n"
+            f"📝 Описание: {item[2]}\n"
+            f"🚚 Тип: {item[4]}\n"
+            f"👤 Продавец: ID {item[3]}")
+
+    kb = [
+        [InlineKeyboardButton(text="💳 Купить", callback_data=f"buy_{item_id}")],
+        [InlineKeyboardButton(text="🔙 К маркету", callback_data="market")]
+    ]
+    
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
+
 @dp.callback_query(F.data == "profile")
 async def profile(callback: types.CallbackQuery):
     conn = sqlite3.connect('safebuy.db')
