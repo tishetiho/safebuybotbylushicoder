@@ -3,7 +3,7 @@ import logging
 import sqlite3
 import time
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from aiocryptopay import CryptoPay
+from aiocryptopay import AioCryptoPay
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -17,7 +17,7 @@ CRYPTO_BOT_TOKEN = '579651:AAPm1XLH5mHg6hYlZepMXmYc4j22JrqV6Al'
 
 logging.basicConfig(level=logging.INFO)
 
-crypto = CryptoPay(token=CRYPTO_BOT_TOKEN, network='mainnet') # Поменяй на 'testnet' для тестов
+crypto = AioCryptoPay(token=CRYPTO_BOT_TOKEN, network='mainnet') # Поменяй на 'testnet' для тестов
 scheduler = AsyncIOScheduler()
 scheduler.start()
 
