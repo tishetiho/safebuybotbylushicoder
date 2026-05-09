@@ -259,8 +259,7 @@ invoice = await crypto.create_invoice(
     currency_type='fiat',
     accepted_assets='USDT,TON' # Список валют, которые ты готов принять
 )
-    
-    await callback.message.answer(
+        await callback.message.answer(
         f"💳 Оплатите товар **{item[0]}**\n"
         f"Сумма: {item[1]} ₽\n\n"
         f"После оплаты бот автоматически откроет чат с продавцом.",
