@@ -436,7 +436,7 @@ async def reject_item(callback: types.CallbackQuery):
     await callback.message.edit_text("❌ Товар отклонен и удален.")
     await bot.send_message(seller_id, "⚠️ Ваш товар отклонен модератором.")
     
-  @dp.callback_query(F.data == "switch_currency")
+@dp.callback_query(F.data == "switch_currency")
 async def switch_currency(callback: types.CallbackQuery):
     conn = sqlite3.connect('safebuy.db')
     user = conn.execute("SELECT currency FROM users WHERE id = ?", (callback.from_user.id,)).fetchone()
