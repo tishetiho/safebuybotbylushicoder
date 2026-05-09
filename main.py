@@ -250,7 +250,15 @@ async def create_deal(callback: types.CallbackQuery):
     item = conn.execute("SELECT title, price, seller_id FROM items WHERE id = ?", (item_id,)).fetchone()
     
     # 1. Создаем инвойс в Crypto Bot
-    invoice = await crypto.create_invoice(asset='USDT', amount=item[1]) # Упрощенно в USDT
+    crypto.create_invoice(asset='USDT', amount=item[1])
+
+# Стало (Оплата в рублях, бот сам сконвертирует):
+invoice = await crypto.create_invoice(
+    amount=item[1], 
+    fiat='RUB', 
+    currency_type='fiat',
+    accepted_assets='USDT,TON' # Список валют, которые ты готов принять
+)
     
     await callback.message.answer(
         f"💳 Оплатите товар **{item[0]}**\n"
