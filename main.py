@@ -11,9 +11,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # --- КОНФИГУРАЦИЯ ---
-API_TOKEN = 'ТВОЙ_ТОКЕН_БОТА'
-ADMIN_ID = 12345678  # Твой ID в Telegram
-CRYPTO_BOT_TOKEN = 'ТОКЕН_КРИПТО_БОТА'
+API_TOKEN = '8033692443:AAEN894GteeRWWYpvjk0t9t-z7hcCYExEsY'
+ADMIN_ID = 5078764886  # Твой ID в Telegram
+CRYPTO_BOT_TOKEN = '579651:AAPm1XLH5mHg6hYlZepMXmYc4j22JrqV6Al'
 
 logging.basicConfig(level=logging.INFO)
 
