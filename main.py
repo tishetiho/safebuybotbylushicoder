@@ -257,7 +257,7 @@ async def create_deal(callback: types.CallbackQuery):
         f"Сумма: {item[1]} ₽\n\n"
         f"После оплаты бот автоматически откроет чат с продавцом.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="Оплатить", url=invoice.pay_url)],
+            [InlineKeyboardButton(text="Оплатить", url=invoice.bot_invoice_url)],
             [InlineKeyboardButton(text="Проверить оплату", callback_data=f"check_{invoice.invoice_id}_{item_id}")]
         ]))
     conn.close()
