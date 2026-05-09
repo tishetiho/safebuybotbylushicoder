@@ -66,7 +66,7 @@ class AdminStates(StatesGroup):
 # --- КЛАВИАТУРЫ ---
 def main_menu():
     kb = [
-        [InlineKeyboardButton(text="🛒 Маркет", callback_data="market"),
+        [InlineKeyboardButton(text="🛒 Маркет", callback_data="market")],
         [InlineKeyboardButton(text="📦 Продать", callback_data="sell")],
         [InlineKeyboardButton(text="👤 Профиль", callback_data="profile")],
         [InlineKeyboardButton(text="🆘 Поддержка", callback_data="support")]
