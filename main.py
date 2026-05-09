@@ -17,7 +17,7 @@ CRYPTO_BOT_TOKEN = '579651:AAPm1XLH5mHg6hYlZepMXmYc4j22JrqV6Al'
 
 logging.basicConfig(level=logging.INFO)
 
-crypto = AioCryptoPay(token=CRYPTO_BOT_TOKEN, network='mainnet') # Поменяй на 'testnet' для тестов
+crypto = AioCryptoPay(token=CRYPTO_BOT_TOKEN) # Поменяй на 'testnet' для тестов
 scheduler = AsyncIOScheduler()
 scheduler.start()
 
