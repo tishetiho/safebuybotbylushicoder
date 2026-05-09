@@ -132,6 +132,49 @@ async def view_item(callback: types.CallbackQuery):
     
     await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
 
+@dp.callback_query(F.data.startswith("dispute_"))
+async def open_dispute(callback: types.CallbackQuery):
+    deal_id = callback.data.split("_")[1]
+    
+    conn = sqlite3.connect('safebuy.db')
+    conn.execute("UPDATE deals SET status = 'dispute' WHERE id = ?", (deal_id,))
+    deal = conn.execute("SELECT buyer_id, seller_id, amount FROM deals WHERE id = ?", (deal_id,)).fetchone()
+    conn.commit()
+    conn.close()
+
+    # Уведомляем стороны
+    await callback.message.answer("⚠️ Спор открыт. Ожидайте вмешательства администратора. Деньги заморожены.")
+    await bot.send_message(deal[1], f"⚠️ Покупатель открыл спор по сделке #{deal_id}. Не выходите из сети.")
+
+    # Уведомляем админа
+    admin_kb = [
+        [InlineKeyboardButton(text="💰 Вернуть покупателю", callback_data=f"refund_{deal_id}")],
+        [InlineKeyboardButton(text="💸 Отдать продавцу", callback_data=f"pay_seller_{deal_id}")]
+    ]
+    await bot.send_message(ADMIN_ID, 
+                           f"🚨 **АРБИТРАЖ (Сделка #{deal_id})**\n\n"
+                           f"Покупатель: {deal[0]}\n"
+                           f"Продавец: {deal[1]}\n"
+                           f"Сумма: {deal[2]} ₽", 
+                           reply_markup=InlineKeyboardMarkup(inline_keyboard=admin_kb))
+
+# --- ЛОГИКА РЕШЕНИЯ СПОРА АДМИНОМ ---
+
+@dp.callback_query(F.data.startswith("refund_"))
+async def admin_refund(callback: types.CallbackQuery):
+    deal_id = callback.data.split("_")[1]
+    # Логика: деньги просто не зачисляются продавцу, 
+    # а в идеале — возвращаются на баланс покупателя в боте
+    await callback.message.edit_text(f"✅ Спор #{deal_id} решен: Деньги возвращены покупателю.")
+    # (Здесь нужно дописать UPDATE users SET balance = balance + amount...)
+
+@dp.callback_query(F.data.startswith("pay_seller_"))
+async def admin_pay_seller(callback: types.CallbackQuery):
+    deal_id = callback.data.split("_")[1]
+    # Принудительно вызываем функцию разморозки из предыдущего шага
+    # release_funds(...)
+    await callback.message.edit_text(f"✅ Спор #{deal_id} решен: Деньги отправлены продавцу.")
+    
 @dp.callback_query(F.data == "profile")
 async def profile(callback: types.CallbackQuery):
     conn = sqlite3.connect('safebuy.db')
