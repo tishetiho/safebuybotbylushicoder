@@ -62,6 +62,7 @@ class CreateItem(StatesGroup):
     description = State()
     delivery_type = State()
 class AdminStates(StatesGroup):
+    waiting_mailing_text = State()
     mailing_text = State()
     ban_id = State()
     
@@ -515,32 +516,51 @@ async def withdraw_money(callback: types.CallbackQuery):
     conn.close()
 
 # --- ЛОГИКА РАССЫЛКИ ---
-
+# 1. Ловим нажатие кнопки "Рассылка" в админке
 @dp.callback_query(F.data == "admin_mailing")
 async def start_mailing(callback: types.CallbackQuery, state: FSMContext):
-    await callback.message.answer("Введите текст рассылки (или /cancel для отмены):")
-    await state.set_state(AdminStates.mailing_text)
+    await callback.message.answer(
+        "📩 **Режим рассылки активирован.**\n\n"
+        "Отправьте сообщение, которое хотите разослать. "
+        "Это может быть текст, фото, видео или пост с кнопками — я скопирую его полностью.\n\n"
+        "Для отмены напишите `/cancel`", 
+        parse_mode="Markdown"
+    )
+    await state.set_state(AdminStates.waiting_mailing_text)
 
-@dp.message(AdminStates.mailing_text)
-async def process_mailing(message: types.Message, state: FSMContext):
+# 2. Принимаем сообщение и рассылаем
+@dp.message(AdminStates.waiting_mailing_text)
+async def perform_mailing(message: types.Message, state: FSMContext):
     if message.text == "/cancel":
         await state.clear()
-        return await message.answer("Отменено.")
+        return await message.answer("🚫 Рассылка отменена.")
 
+    # Получаем список всех ID пользователей из базы
     conn = sqlite3.connect('safebuy.db')
     users = conn.execute("SELECT id FROM users").fetchall()
     conn.close()
 
-    count = 0
+    count_success = 0
+    count_errors = 0
+    
+    await message.answer(f"🚀 Начинаю рассылку на {len(users)} пользователей...")
+
     for user in users:
         try:
-            await bot.send_message(user[0], message.text)
-            count += 1
-            await asyncio.sleep(0.05) # Защита от спам-фильтра ТГ
+            # copy_to — ключевой метод. Он копирует сообщение 1-в-1
+            await message.copy_to(chat_id=user[0])
+            count_success += 1
         except Exception:
+            # Сюда попадают те, кто заблокировал бота
+            count_errors += 1
             continue
-    
-    await message.answer(f"✅ Рассылка завершена! Получили: {count} чел.")
+
+    await message.answer(
+        f"✅ **Рассылка завершена!**\n\n"
+        f"Успешно: `{count_success}`\n"
+        f"Ошибок: `{count_errors}`",
+        parse_mode="Markdown"
+    )
     await state.clear()
 
 # --- МОДЕРАЦИЯ ТОВАРОВ (КНОПКИ ИЗ ПРЕДЫДУЩИХ ШАГОВ) ---
