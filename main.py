@@ -268,6 +268,58 @@ async def create_deal(callback: types.CallbackQuery):
         ])
     )
 
+@dp.callback_query(F.data.startswith("check_"))
+async def check_payment(callback: types.CallbackQuery):
+    # Разбираем callback_data (check_IDИНВОЙСА_IDТОВАРА)
+    data = callback.data.split("_")
+    invoice_id = int(data[1])
+    item_id = data[2]
+
+    # Запрашиваем инвойс у Crypto Bot
+    invoices = await crypto.get_invoices(invoice_ids=invoice_id)
+    
+    # Если инвойс найден и его статус 'paid' (оплачен)
+    if invoices and invoices.status == 'paid':
+        await callback.answer("✅ Оплата получена!", show_alert=True)
+        
+        # 1. Достаем инфу о товаре и продавце из базы
+        conn = sqlite3.connect('safebuy.db')
+        item = conn.execute("SELECT title, price, seller_id FROM items WHERE id = ?", (item_id,)).fetchone()
+        
+        # 2. Создаем запись о сделке в базе
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO deals (buyer_id, seller_id, amount, status) VALUES (?, ?, ?, ?)",
+            (callback.from_user.id, item[2], item[1], 'paid')
+        )
+        deal_id = cur.lastrowid
+        conn.commit()
+        conn.close()
+
+        # 3. Уведомляем продавца
+        await bot.send_message(
+            item[2], 
+            f"💰 **У вас новая продажа!**\n\n"
+            f"Товар: {item[0]}\n"
+            f"Сумма: {item[1]} ₽\n"
+            f"Покупатель оплатил товар. Деньги в холде на 36 часов.\n"
+            f"Свяжитесь с покупателем в анонимном чате!"
+        )
+
+        # 4. Удаляем кнопку оплаты и пишем, что всё ок
+        await callback.message.edit_text(
+            f"🥳 **Товар «{item[0]}» оплачен!**\n\n"
+            f"Чат с продавцом открыт. Пожалуйста, обсудите детали доставки.\n"
+            f"После получения нажми кнопку 'Подтвердить получение'.",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="💬 Написать продавцу", callback_data=f"chat_{deal_id}")],
+                [InlineKeyboardButton(text="✅ Подтвердить получение", callback_data=f"confirm_{deal_id}")]
+            ])
+        )
+    else:
+        # Если еще не оплачено
+        await callback.answer("⏳ Оплата пока не обнаружена. Попробуйте через минуту.", show_alert=True)
+
 @dp.message(F.text)
 async def chat_mediator(message: types.Message):
     """Пересылает сообщения между покупателем и продавцом во время сделки"""
