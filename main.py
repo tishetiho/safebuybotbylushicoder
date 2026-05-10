@@ -248,26 +248,25 @@ async def create_deal(callback: types.CallbackQuery):
     
     conn = sqlite3.connect('safebuy.db')
     item = conn.execute("SELECT title, price, seller_id FROM items WHERE id = ?", (item_id,)).fetchone()
-    
-    # 1. Создаем инвойс в Crypto Bot
-    crypto.create_invoice(asset='USDT', amount=item[1])
+    conn.close()
 
-# Стало (Оплата в рублях, бот сам сконвертирует):
-invoice = await crypto.create_invoice(
-    amount=item[1], 
-    fiat='RUB', 
-    currency_type='fiat',
-    accepted_assets='USDT,TON' # Список валют, которые ты готов принять
-)
+    # Создаем инвойс (убедись, что закрывающая скобка ) стоит на своем месте)
+    invoice = await crypto.create_invoice(
+        amount=item[1], 
+        fiat='RUB', 
+        currency_type='fiat'
+    )
+
+    # Строка 262 — должна иметь ровно 4 пробела от края
     await callback.message.answer(
         f"💳 Оплатите товар **{item[0]}**\n"
         f"Сумма: {item[1]} ₽\n\n"
         f"После оплаты бот автоматически откроет чат с продавцом.",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="Оплатить", url=invoice.bot_invoice_url)],
-        [InlineKeyboardButton(text="Проверить оплату", callback_data=f"check_{invoice.invoice_id}_{item_id}")]
-        ]))
-    conn.close()
+            [InlineKeyboardButton(text="Оплатить", url=invoice.bot_invoice_url)],
+            [InlineKeyboardButton(text="Проверить оплату", callback_data=f"check_{invoice.id}_{item_id}")]
+        ])
+    )
 
 @dp.message(F.text)
 async def chat_mediator(message: types.Message):
