@@ -13,7 +13,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 # --- КОНФИГУРАЦИЯ ---
 API_TOKEN = '8033692443:AAEN894GteeRWWYpvjk0t9t-z7hcCYExEsY'
 ADMIN_ID = 5078764886  # Твой ID в Telegram
-CRYPTO_BOT_TOKEN = '57607:AAKwrUEhaTPAH2ZBJvY1PGNLK4UJ29eXbGH'
+CRYPTO_BOT_TOKEN = '579651:AAPm1XLH5mHg6hYlZepMXmYc4j22JrqV6Al'
 
 logging.basicConfig(level=logging.INFO)
 
