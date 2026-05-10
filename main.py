@@ -54,6 +54,8 @@ def init_db():
     conn.close()
 
 # --- СОСТОЯНИЯ (FSM) ---
+class ChatStates(StatesGroup):
+    in_chat = State()
 class CreateItem(StatesGroup):
     title = State()
     price = State()
@@ -320,6 +322,70 @@ async def check_payment(callback: types.CallbackQuery):
         # Если еще не оплачено
         await callback.answer("⏳ Оплата пока не обнаружена. Попробуйте через минуту.", show_alert=True)
 
+@dp.callback_query(F.data.startswith("confirm_"))
+async def confirm_deal(callback: types.CallbackQuery):
+    deal_id = callback.data.split("_")[1]
+    
+    conn = sqlite3.connect('safebuy.db')
+    cur = conn.cursor()
+    
+    # Достаем инфу о сделке
+    deal = cur.execute("SELECT seller_id, amount, status FROM deals WHERE id = ?", (deal_id,)).fetchone()
+    
+    if not deal or deal[2] != 'paid':
+        return await callback.answer("⚠️ Сделка уже завершена или не найдена.")
+
+    seller_id = deal[0]
+    amount = deal[1]
+    
+    # Комиссия сервиса (например, 5%)
+    fee = 0.05 
+    final_amount = amount * (1 - fee)
+
+    # Начисляем деньги продавцу и закрываем сделку
+    cur.execute("UPDATE users SET balance = balance + ? WHERE id = ?", (final_amount, seller_id))
+    cur.execute("UPDATE deals SET status = 'completed' WHERE id = ?", (deal_id,))
+    
+    conn.commit()
+    conn.close()
+
+    await callback.message.edit_text(f"✅ Вы подтвердили получение! Продавец получил {final_amount:.2f} ₽.")
+    await bot.send_message(seller_id, f"💰 Сделка #{deal_id} завершена! На ваш баланс зачислено {final_amount:.2f} ₽.")
+
+@dp.callback_query(F.data.startswith("chat_"))
+async def start_chat(callback: types.CallbackQuery, state: FSMContext):
+    deal_id = callback.data.split("_")[1]
+    
+    conn = sqlite3.connect('safebuy.db')
+    deal = conn.execute("SELECT buyer_id, seller_id FROM deals WHERE id = ?", (deal_id,)).fetchone()
+    conn.close()
+
+    # Определяем, кто нажал — покупатель или продавец
+    if callback.from_user.id == deal[0]:
+        target_id = deal[1] # Пишем продавцу
+    else:
+        target_id = deal[0] # Пишем покупателю
+
+    await state.update_data(target_id=target_id, deal_id=deal_id)
+    await state.set_state(ChatStates.in_chat)
+    
+    await callback.message.answer("🤝 Чат открыт! Все сообщения будут пересланы второму участнику.\nЧтобы выйти, напиши /stop")
+
+@dp.message(ChatStates.in_chat)
+async def chat_relay(message: types.Message, state: FSMContext):
+    if message.text == "/stop":
+        await state.clear()
+        return await message.answer("🚪 Вы вышли из чата.")
+
+    data = await state.get_data()
+    target_id = data.get("target_id")
+    
+    try:
+        # Пересылаем сообщение второму участнику
+        await bot.send_message(target_id, f"✉️ **Новое сообщение:**\n\n{message.text}")
+    except Exception:
+        await message.answer("❌ Не удалось доставить сообщение. Возможно, участник заблокировал бота.")
+        
 @dp.message(F.text)
 async def chat_mediator(message: types.Message):
     """Пересылает сообщения между покупателем и продавцом во время сделки"""
