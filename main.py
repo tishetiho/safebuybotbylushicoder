@@ -94,6 +94,49 @@ async def start(message: types.Message):
         parse_mode="Markdown"
     )
 
+# АДМИН ПАНЕЛЬ
+@dp.message(Command("admin"))
+async def admin_panel(message: types.Message):
+    # Лог для дебага — увидишь в консоли, кто стучится
+    print(f"DEBUG: Попытка входа в админку. Юзер ID: {message.from_user.id}, Ожидаемый ADMIN_ID: {ADMIN_ID}")
+
+    if int(message.from_user.id) != int(ADMIN_ID):
+        # Если не админ, бот ответит, чтобы ты понимал, в чем ошибка
+        await message.answer(f"❌ Доступ запрещен. Ваш ID ({message.from_user.id}) не в списке админов.")
+        return
+
+    try:
+        conn = sqlite3.connect('safebuy.db')
+        cur = conn.cursor()
+        
+        # Собираем статистику с проверкой на существование таблиц
+        total_users = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        total_balance = cur.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
+        
+        # Статусы должны совпадать с тем, что ты пишешь в базе ('paid' или 'open')
+        in_hold = cur.execute("SELECT SUM(amount) FROM deals WHERE status = 'paid'").fetchone()[0] or 0
+        pending_items = cur.execute("SELECT COUNT(*) FROM items WHERE status = 'on_moderation'").fetchone()[0]
+        conn.close()
+
+        text = (f"🛠 **Админ-панель SafeBuy**\n\n"
+                f"👥 Всего юзеров: {total_users}\n"
+                f"💰 Баланс всех: {total_balance:.2f} ₽\n"
+                f"⏳ В холде (сделки): {in_hold:.2f} ₽\n"
+                f"📦 Ожидают модерации: {pending_items}\n\n"
+                f"Выберите действие:")
+
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_mailing")],
+            [InlineKeyboardButton(text="📦 Модерация", callback_data="admin_mod")],
+            [InlineKeyboardButton(text="🚫 Забанить юзера", callback_data="admin_ban")]
+        ])
+        
+        await message.answer(text, reply_markup=kb, parse_mode="Markdown")
+        
+    except Exception as e:
+        await message.answer(f"⚠️ Ошибка БД: {e}")
+        print(f"ERROR: {e}")
+
 @dp.callback_query(F.data == "market")
 async def show_market(callback: types.CallbackQuery):
     conn = sqlite3.connect('safebuy.db')
@@ -470,37 +513,6 @@ async def withdraw_money(callback: types.CallbackQuery):
     except Exception as e:
         await callback.answer("Ошибка API или недостаточно средств на шлюзе.", show_alert=True)
     conn.close()
-
-# --- АДМИН-ПАНЕЛЬ ---
-@dp.message(Command("admin"))
-async def admin_panel(message: types.Message):
-    if message.from_user.id != ADMIN_ID:
-        return
-
-    conn = sqlite3.connect('safebuy.db')
-    cur = conn.cursor()
-    
-    # Собираем статистику
-    total_users = cur.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-    total_balance = cur.execute("SELECT SUM(balance) FROM users").fetchone()[0] or 0
-    in_hold = cur.execute("SELECT SUM(amount) FROM deals WHERE status = 'open'").fetchone()[0] or 0
-    pending_items = cur.execute("SELECT COUNT(*) FROM items WHERE status = 'on_moderation'").fetchone()[0]
-    conn.close()
-
-    text = (f"🛠 **Админ-панель SafeBuy**\n\n"
-            f"👥 Всего юзеров: {total_users}\n"
-            f"💰 Баланс всех: {total_balance:.2f} ₽\n"
-            f"⏳ В холде (сделки): {in_hold:.2f} ₽\n"
-            f"📦 Ожидают модерации: {pending_items}\n\n"
-            f"Выберите действие:")
-
-    kb = [
-        [InlineKeyboardButton(text="📢 Рассылка", callback_data="admin_mailing")],
-        [InlineKeyboardButton(text="🚫 Забанить юзера", callback_data="admin_ban")],
-        [InlineKeyboardButton(text="🔄 Режим: Mainnet", callback_data="toggle_net")] # Можно допилить смену текста
-    ]
-    
-    await message.answer(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb), parse_mode="Markdown")
 
 # --- ЛОГИКА РАССЫЛКИ ---
 
